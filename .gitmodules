@@ -1,0 +1,3 @@
+[submodule "svdtoheaders"]
+	path = svdtoheaders
+	url = https://github.com/leocafonso/svdtoheaders.git
