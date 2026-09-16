@@ -1,5 +1,13 @@
 # RA8M1 memorymap + system header generator — implementation plan
 
+> **Superseded 2026-09-14:** the `--peripheral OUTFILE:PATH:FAMILYPREFIX:INSTANCES`
+> CLI flag described throughout this doc (and its `NAME:OUTFILE:PATHCOMMENT`
+> variant below) has been replaced by a YAML manifest,
+> `RA8M1/peripherals.yaml`, driven via `--config`. See `README.md` for current
+> usage. The design rationale below (address-keyed join, register/bitfield
+> emission rules) is still accurate; only the CLI surface for selecting which
+> peripherals to render has changed.
+
 ## Context
 
 `RA8M1/nuttx_hw_headers/` is the generator's **output folder** (per the file

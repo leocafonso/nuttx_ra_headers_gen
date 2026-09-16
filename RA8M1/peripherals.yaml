@@ -1,0 +1,148 @@
+# Generation manifest for RA8M1 (R7FA8M1AH) NuttX hardware headers.
+#
+# Drives gen_ra_headers.py --config RA8M1/peripherals.yaml -- this file is
+# the reproducible record of exactly how each header was generated, so a
+# regeneration run never depends on remembering a one-off CLI invocation.
+# See gen_ra_headers.py's load_config()/resolve_family_instances() for the
+# schema and semantics of `template`/`sources` below.
+#
+# svd/zone/iodefine/outfile paths are relative to this file's directory.
+
+svd: svd/R7FA8M1AH.svd
+# ECFC = the largest-pincount TrustZone variant; the .rzone file is only
+# used for canonical peripheral names/addresses and secure/non-secure
+# region pairs (see memory ra8m1-header-generation), which don't vary
+# across package/pincount variants, so any variant would resolve the same.
+zone: zone/R7FA8M1AHECFC.rzone
+iodefine: iodefine/R7FA8M1AH.h
+
+# RA4M1 (the other family this generator supports) has a family-generic
+# "hardware/ra_memorymap.h" dispatcher that #includes the chip-specific one
+# based on a CONFIG_RA*_FAMILY define. arch/arm/src/ra8m1/ has no such
+# dispatcher yet (RA8M1 is mid-port -- see memory ra8m1-header-generation)
+# and including the RA4M1 one by name would silently pull in the wrong
+# chip's memorymap (or fail to compile, since ra8m1/hardware/ has no
+# ra_memorymap.h at all). Point every generated header straight at
+# RA8M1's own memorymap until/unless a dispatcher is added.
+memorymap_include: hardware/ra8m1_memorymap.h
+
+memorymap:
+  outfile: nuttx_hw_headers/ra8m1_memorymap.h
+  path: arch/arm/src/ra8m1/hardware/ra8m1_memorymap.h
+
+# Draft Kconfig -- see gen_ra_headers.py's emit_kconfig() docstring. Only
+# generates the mechanically-derivable part (which RA_HAVE_* flags each
+# part number selects, based on which `peripherals[].instances` its own
+# .rzone actually lists, plus the bare RA_HAVE_* declarations) -- NOT the
+# human-facing enable options (prompts, "select <driver>" lines, PWM/mode
+# sub-options), which still need writing by hand afterward the way
+# RA4M1/nuttx_hw_headers/Kconfig (a copy of the real, hand-maintained
+# arch/arm/src/ra4/Kconfig) has them. `arch/arm/src/ra8m1/` currently has
+# no Kconfig at all (see memory ra8m1-header-generation) and neither
+# ARCH_CHIP_RA8M1 nor RA8M1_FAMILY exist yet in arch/arm/Kconfig -- both
+# still need to be wired up there by hand, mirroring how ARCH_CHIP_RA4 /
+# the "if ARCH_CHIP_RA4 ... source .../ra4/Kconfig" block work today.
+kconfig:
+  outfile: nuttx_hw_headers/Kconfig
+  chip_depends: ARCH_CHIP_RA8M1
+  family_constant: RA8M1_FAMILY
+  # RA8M1 = Cortex-M85; ARCH_CORTEXM85 already exists in arch/arm/Kconfig.
+  arch_select: ARCH_CORTEXM85
+  menu_title: RA8M1 Peripheral Support
+  # Default choice pick is otherwise arbitrary (alphabetically-first
+  # filename -- would land on the undocumented "AM" package, see below).
+  # AHECFC is the one variant already used for header generation (the
+  # `zone:` field above) and is confirmed real (Table 1.13).
+  default_chip: R7FA8M1AHECFC
+  # All 10 RA8M1 package/die variants found under zone/. Chip labels are
+  # the literal filename stem (derive_chip_label() -- confirmed against the
+  # RA8M1 User's Manual Table 1.13 "Product part number", which lists these
+  # exact, uncollapsed part numbers; RA4M1's collapsed "xx" form turned out
+  # to be family-specific, not a generic pattern -- do not re-derive it
+  # here without separately confirming which axis, if any, is safe to
+  # collapse for RA8M1). NOTE: R7FA8M1A{H,F}ECAM (the "AM" package) does
+  # NOT appear anywhere in that manual (Rev 1.30, Dec 2025) -- verify it's
+  # a real, intended part before wiring its ARCH_CHIP_* entry into the
+  # real Kconfig.
+  variant_zones: zone/*.rzone
+
+# Draft chip.h -- see gen_ra_headers.py's emit_chip_header() docstring.
+# Same mechanical-only scope as the Kconfig draft, STM32-style: one
+# #if/#elif per part number defining RA_N<PREFIX> (a count, not a bool --
+# c.f. STM32_NUSART/STM32_NSPI in arch/arm/include/stm32f4/chip.h) for each
+# `peripherals[].instances` group not marked `variant_tracked: false`.
+# `arch/arm/include/ra8m1/chip.h` currently in the nuttx tree is a stale,
+# unmodified copy of ra4/chip.h (wrong file-header path, wrong include
+# guard, RA4M1-specific content) -- do NOT use it as a reference; this
+# draft replaces it, generated fresh from `.rzone` data instead.
+chip_header:
+  outfile: nuttx_hw_headers/chip.h
+  path: arch/arm/include/ra8m1/chip.h
+  family_label: RA8M1
+  variant_zones: zone/*.rzone
+
+peripherals:
+  - outfile: nuttx_hw_headers/ra8m1_system.h
+    path: arch/arm/src/ra8m1/hardware/ra8m1_system.h
+    prefix: SYSTEM
+    # Core singleton, present on every part variant -- RA_HAVE_SYSTEM (or an
+    # RA_NSYSTEM count in chip.h) would be meaningless (RA4M1's real Kconfig
+    # has no RA_HAVE_* for its own always-present peripherals either, only
+    # for ones that vary by package: SCI/GPT; STM32's chip.h doesn't count
+    # its own always-one blocks like SYSCFG either). Excluded from both the
+    # Kconfig and chip.h drafts.
+    variant_tracked: false
+    instances:
+      - name: SYSTEM
+
+  - outfile: nuttx_hw_headers/ra8m1_mstp.h
+    path: arch/arm/src/ra8m1/hardware/ra8m1_mstp.h
+    prefix: MSTP
+    variant_tracked: false  # core singleton -- see ra8m1_system.h above
+    instances:
+      - name: MSTP
+
+  - outfile: nuttx_hw_headers/ra8m1_icu.h
+    path: arch/arm/src/ra8m1/hardware/ra8m1_icu.h
+    prefix: ICU
+    variant_tracked: false  # core singleton -- see ra8m1_system.h above
+    instances:
+      # FSP folds two SVD peripherals into one iodefine struct here: SVD
+      # ICU_COMMON (0x40006000, IRQCR/NMICR only) supplies the low offsets,
+      # SVD ICU (0x4000C000, SWIRQ/NMIER/WUPEN/IELSR...) is spliced in
+      # 0x6000 bytes higher via a delta computed from their real SVD base
+      # addresses. Order doesn't affect output (registers are re-sorted by
+      # final offset) but matches iodefine's own low-to-high layout.
+      - name: ICU
+        sources: [ICU_COMMON, ICU]
+
+  - outfile: nuttx_hw_headers/ra8m1_sci.h
+    path: arch/arm/src/ra8m1/hardware/ra8m1_sci.h
+    prefix: SCI_B
+    instances:
+      # SCI_B5-8 do NOT exist on RA8M1 -- confirmed absent from the .rzone
+      # file (the part/package-scoped ground truth), even though
+      # iodefine.h still defines R_SCI_B5..8_BASE (vestigial, reusing
+      # R_SCI_B0_Type -- iodefine.h is shared across a wider RA8xx family
+      # and isn't part-scoped the way .rzone is). No template override
+      # needed for any instance here: each resolves directly by address to
+      # its own SVD peripheral (SVD just names them SCI0-4/SCI9 instead of
+      # SCI_B0-4/SCI_B9, plain name-divergence, resolved automatically).
+      - name: SCI_B0
+      - name: SCI_B1
+      - name: SCI_B2
+      - name: SCI_B3
+      - name: SCI_B4
+      - name: SCI_B9
+  # - outfile: nuttx_hw_headers/ra8m1_gpt.h
+  #   path: arch/arm/src/ra8m1/hardware/ra8m1_gpt.h
+  #   prefix: GPT
+  #   instances:
+  #     - name: GPT0
+  #     - name: GPT1
+  #     - name: GPT2
+  #     - name: GPT3
+  #     - name: GPT4
+  #     - name: GPT5
+  #     - name: GPT6
+  #     - name: GPT7
